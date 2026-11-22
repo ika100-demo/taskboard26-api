@@ -10,6 +10,7 @@ tasks:
     covers: [AC-001.3, AC-001.7, AC-001.8]
     parallel_safe: true
     depends_on: []
+    done: true
   - id: t2
     title: Add TaskCreate and TaskOut schemas with title and due_date validation
     files: [src/taskboard26_api/task_schemas.py, tests/test_task_schemas_unit.py]
