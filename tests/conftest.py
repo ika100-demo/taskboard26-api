@@ -22,9 +22,16 @@ _UNREACHABLE_FALLBACK = "postgresql://test:test@127.0.0.1:9/test"
 
 
 @pytest.fixture()
-def client() -> TestClient:
-    """A TestClient for the FastAPI application."""
-    return TestClient(app)
+def client() -> Iterator[TestClient]:
+    """A TestClient for the FastAPI application, backed by an in-memory store (no database)."""
+    from taskboard26_api.task_store import TaskStore, get_task_store
+
+    store = TaskStore()
+    app.dependency_overrides[get_task_store] = lambda: store
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.pop(get_task_store, None)
 
 
 # ---------------------------------------------------------------------------

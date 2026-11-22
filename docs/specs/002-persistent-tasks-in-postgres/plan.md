@@ -24,6 +24,7 @@ tasks:
     covers: [AC-002.1, AC-002.2, AC-002.3, AC-002.4, AC-002.5, AC-002.6, AC-002.7]
     parallel_safe: true
     depends_on: [t1, t2]
+    done: true
 ---
 
 # Plan — 002 Persistent tasks in Postgres

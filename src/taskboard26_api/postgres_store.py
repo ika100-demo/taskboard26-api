@@ -1,13 +1,15 @@
 """Durable task store on PostgreSQL (SQLAlchemy Core + psycopg 3)."""
 
+import socket
 import threading
+import weakref
 from collections.abc import Callable
 from datetime import date
 from typing import Any, TypeVar
 from uuid import uuid4
 
 import structlog
-from sqlalchemy import Engine, create_engine, text
+from sqlalchemy import Engine, create_engine, event, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import InterfaceError, OperationalError
 from sqlalchemy.exc import TimeoutError as PoolTimeoutError
@@ -40,6 +42,11 @@ _CONNECT_ARGS: dict[str, Any] = {
     "application_name": "taskboard26-api",
 }
 
+# Client-side bound on one store call: a stalled server keeps sockets open and answers nothing,
+# so the server-side statement_timeout and tcp_user_timeout never fire. After it fires, a failed
+# pre-ping may still spend connect_timeout (2 s) reconnecting, so the whole call stays under 5 s.
+_WATCHDOG_SECONDS = 2.0
+
 _T = TypeVar("_T")
 _log = structlog.get_logger(__name__)
 
@@ -50,6 +57,7 @@ class PostgresTaskStore:
         self._schema_ready = False
         self._schema_lock = threading.Lock()
         self._engine: Engine | None = None
+        self._connections: weakref.WeakSet[Any] = weakref.WeakSet()
         if database_url:
             url = make_url(database_url).set(drivername="postgresql+psycopg")
             self._engine = create_engine(
@@ -60,11 +68,29 @@ class PostgresTaskStore:
                 pool_timeout=2,
                 pool_pre_ping=True,
             )
+            event.listen(self._engine, "connect", self._track_connection)
+
+    def _track_connection(self, dbapi_connection: Any, _record: Any) -> None:
+        self._connections.add(dbapi_connection)
+
+    def _abort_connections(self) -> None:
+        """Shut down the sockets of every pooled connection so that blocked calls fail at once."""
+        for connection in list(self._connections):
+            try:
+                with socket.fromfd(
+                    connection.pgconn.socket, socket.AF_INET, socket.SOCK_STREAM
+                ) as dup:
+                    dup.shutdown(socket.SHUT_RDWR)
+            except Exception:  # noqa: BLE001, S112 - best effort; the connection may be closed
+                continue
 
     def _run(self, operation: str, fn: Callable[[Engine], _T]) -> _T:
+        watchdog = threading.Timer(_WATCHDOG_SECONDS, self._abort_connections)
+        watchdog.daemon = True
         try:
             if self._engine is None:
                 raise StorageUnavailableError("storage not configured")
+            watchdog.start()
             return fn(self._engine)
         except (OperationalError, InterfaceError, PoolTimeoutError) as exc:
             _log.warning("storage_unavailable", operation=operation, error=type(exc).__name__)
@@ -72,6 +98,8 @@ class PostgresTaskStore:
         except StorageUnavailableError as exc:
             _log.warning("storage_unavailable", operation=operation, error=type(exc).__name__)
             raise
+        finally:
+            watchdog.cancel()
 
     def _ensure_schema(self, engine: Engine) -> None:
         if self._schema_ready:
@@ -126,12 +154,15 @@ class PostgresTaskStore:
     def ping(self) -> bool:
         if self._engine is None:
             return False
-        try:
-            with self._engine.begin() as conn:
+
+        def op(engine: Engine) -> None:
+            with engine.begin() as conn:
                 conn.execute(text("SET LOCAL statement_timeout = '2s'"))
                 conn.execute(text("SELECT 1"))
-        except Exception as exc:  # ping never raises
-            _log.warning("storage_unavailable", operation="ping", error=type(exc).__name__)
+
+        try:
+            self._run("ping", op)
+        except Exception:  # ping never raises; _run has logged the outage
             return False
         return True
 
