@@ -1,7 +1,7 @@
 ---
 spec_id: 001-create-and-list-tasks-in-memory
 title: Create and list tasks (in memory)
-status: draft
+status: approved
 priority: P1
 shape: service-python
 ---
@@ -64,3 +64,4 @@ As a taskboard user, I want to list all tasks, so that I can see what I have rec
 - 2026-11-22 created
 - 2026-11-22 priority P1 proposed: P1: normal bug or feature
 - 2026-11-22 amended: open question on access answered (no authentication for now, every environment); added as a non-goal
+- 2026-11-22 approved
