@@ -1,7 +1,7 @@
 ---
 spec_id: 002-persistent-tasks-in-postgres
 title: Persistent tasks in Postgres
-status: approved
+status: building
 priority: P1
 shape: service-python
 parent: ika100-demo/taskboard26-gitops:001-persistent-tasks-and-web-task-board
@@ -183,3 +183,4 @@ as tie-breaker. Liveness never touches the database; readiness pings it with the
 
 - 2026-11-22 created from the system plan, with its criteria (spec 147)
 - 2026-11-22 approved
+- 2026-11-22 building
