@@ -1,3 +1,10 @@
+## [0.2.0] — 2026-11-22
+
+Tagged commit: c9652ea
+
+### Features
+- feat(tasks): persistent tasks in Postgres (#6) (c9652ea)
+
 ## [0.1.0] — 2026-11-22
 
 Tagged commit: 56add58
