@@ -130,6 +130,8 @@ class TcpProxy:
         self._lock = threading.Lock()
         self._conns: list[socket.socket] = []
         self._listener: socket.socket | None = None
+        self._stalled = False
+        self._held: list[socket.socket] = []
         self.port = 0
         self._listen(0)
 
@@ -159,6 +161,10 @@ class TcpProxy:
                 client, _ = listener.accept()
             except OSError:
                 return
+            if self._stalled:  # accept and keep open, forward nothing
+                with self._lock:
+                    self._held.append(client)
+                continue
             try:
                 upstream = socket.create_connection(self._target, timeout=5)
                 upstream.settimeout(None)
@@ -170,10 +176,11 @@ class TcpProxy:
             threading.Thread(target=self._pump, args=(client, upstream), daemon=True).start()
             threading.Thread(target=self._pump, args=(upstream, client), daemon=True).start()
 
-    @staticmethod
-    def _pump(src: socket.socket, dst: socket.socket) -> None:
+    def _pump(self, src: socket.socket, dst: socket.socket) -> None:
         try:
             while data := src.recv(65536):
+                while self._stalled:
+                    threading.Event().wait(0.05)
                 dst.sendall(data)
         except OSError:
             pass
@@ -198,8 +205,17 @@ class TcpProxy:
                 pass
             sock.close()
 
+    def stall(self) -> None:
+        """Keep every connection open (old and new) but forward nothing."""
+        self._stalled = True
+
     def restore(self) -> None:
-        """Listen on the same port again."""
+        """Listen on the same port again and forward again."""
+        self._stalled = False
+        with self._lock:
+            held, self._held = self._held, []
+        for sock in held:
+            sock.close()
         if self._listener is None:
             self._listen(self.port)
 

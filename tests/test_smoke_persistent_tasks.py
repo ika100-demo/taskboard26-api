@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 from uuid import UUID
 
@@ -30,6 +31,9 @@ def test_smoke_ac_002_2_list_is_task_shaped_read_only(smoke_base_url: str) -> No
     for item in items:
         assert set(item) == {"id", "title", "due_date", "created_at"}
         UUID(item["id"])
+        assert re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$", item["created_at"])
+    stamps = [item["created_at"] for item in items]
+    assert stamps == sorted(stamps)  # oldest first
 
 
 @pytest.mark.smoke

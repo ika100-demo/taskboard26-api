@@ -52,11 +52,12 @@ def test_ac_002_2_empty_db_table_created_and_empty_list(  # AC-002.2
     clean_db: str, start_api: ApiStarter
 ) -> None:
     with start_api(clean_db) as api:
+        # the table exists at start, before any request
+        rows = run_sql(clean_db, "SELECT to_regclass('tasks')::text", fetch=True)
+        assert rows == [("tasks",)], "the API did not create its table at start"
         r = api.get("/tasks")
         assert r.status_code == 200
         assert r.json() == []
-    rows = run_sql(clean_db, "SELECT to_regclass('tasks')::text", fetch=True)
-    assert rows == [("tasks",)], "the API did not create its table at start"
 
 
 def test_ac_002_2_existing_rows_kept_unchanged(  # AC-002.2
@@ -127,8 +128,37 @@ def test_ac_002_3_db_unreachable_gives_503(  # AC-002.3
         # nothing was created during the outage
         assert api.get("/tasks").json() == [stored]
 
+        # a stalled database: connections stay open (pooled ones too) but nothing is answered
+        proxy.stall()
+        started = time.monotonic()
+        listed = api.get("/tasks")
+        assert time.monotonic() - started < 5
+        assert listed.status_code == 503
+        assert listed.json() == UNAVAILABLE
+        started = time.monotonic()
+        posted = api.post("/tasks", json={"title": "during stall"})
+        assert time.monotonic() - started < 5
+        assert posted.status_code == 503
+        assert posted.json() == UNAVAILABLE
+        proxy.restore()
+        deadline = time.monotonic() + 60
+        while api.get("/ready").status_code != 200 and time.monotonic() < deadline:
+            time.sleep(0.5)
+        assert api.get("/tasks").json() == [stored]
 
-def test_ac_002_3_unreachable_from_the_start_gives_503(start_api: ApiStarter) -> None:  # AC-002.3
+
+def test_ac_002_3_unreachable_from_the_start_gives_503(  # AC-002.3
+    db_proxy: tuple[TcpProxy, str], start_api: ApiStarter
+) -> None:
+    proxy, stalled_url = db_proxy
+    proxy.stall()
+    with start_api(stalled_url) as api:  # a stalled database at start must not block it
+        for call in (lambda: api.get("/tasks"), lambda: api.post("/tasks", json={"title": "v"})):
+            started = time.monotonic()
+            r = call()
+            assert time.monotonic() - started < 5
+            assert r.status_code == 503
+            assert r.json() == UNAVAILABLE
     with start_api(closed_local_url()) as api:
         started = time.monotonic()
         r = api.get("/tasks")
@@ -178,8 +208,11 @@ def test_ac_002_5_db_back_after_outage_without_restart(  # AC-002.5
     with start_api(url) as api:
         earlier = [_create(api, "one"), _create(api, "two", "2026-05-06")]
         proxy.cut()
-        assert api.get("/ready").status_code == 503
-        assert api.get("/tasks").status_code == 503
+        outage_end = time.monotonic() + 6  # an outage of several seconds, not milliseconds
+        while time.monotonic() < outage_end:
+            assert api.get("/ready").status_code == 503
+            assert api.get("/tasks").status_code == 503
+            time.sleep(0.5)
         proxy.restore()
 
         deadline = time.monotonic() + 60
@@ -208,8 +241,10 @@ def test_ac_002_6_limit_reached_gives_409(  # AC-002.6
         run_sql(
             clean_db,
             "INSERT INTO tasks (id, title) "
-            "SELECT gen_random_uuid(), 't' || g FROM generate_series(1, 10000) AS g",
+            "SELECT gen_random_uuid(), 't' || g FROM generate_series(1, 9999) AS g",
         )
+        last = api.post("/tasks", json={"title": "the 10000th"})
+        assert last.status_code == 201
         r = api.post("/tasks", json={"title": "one too many"})
         assert r.status_code == 409
         assert r.json() == {"detail": "task limit reached"}
