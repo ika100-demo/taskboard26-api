@@ -17,6 +17,7 @@ tasks:
     covers: [AC-002.7]
     parallel_safe: true
     depends_on: []
+    done: true
   - id: t3
     title: Wire storage outages, readiness, startup schema and contract errors into the app
     files: [src/taskboard26_api/tasks_api.py, src/taskboard26_api/main.py]
