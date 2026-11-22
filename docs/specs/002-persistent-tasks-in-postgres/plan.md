@@ -10,6 +10,7 @@ tasks:
     covers: [AC-002.1, AC-002.2, AC-002.3, AC-002.5, AC-002.6]
     parallel_safe: true
     depends_on: []
+    done: true
   - id: t2
     title: Map title validation errors to the contract rule ids
     files: [src/taskboard26_api/task_schemas.py, tests/test_task_schemas_unit.py]
