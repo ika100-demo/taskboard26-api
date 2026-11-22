@@ -168,6 +168,11 @@ class TcpProxy:
                 client, _ = listener.accept()
             except OSError:
                 return
+            with self._lock:
+                cut = self._listener is not listener
+            if cut:  # the proxy was cut while this connection was being accepted
+                client.close()
+                return
             if self._stalled:  # accept and keep open, forward nothing
                 with self._lock:
                     self._held.append(client)
@@ -204,6 +209,10 @@ class TcpProxy:
             listener, self._listener = self._listener, None
             conns, self._conns = self._conns, []
         if listener is not None:
+            try:  # on Linux close() alone leaves a blocked accept() serving new connections
+                listener.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
             listener.close()
         for sock in conns:
             try:
