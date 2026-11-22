@@ -5,7 +5,7 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
-from taskboard26_api.task_schemas import TaskCreate, TaskOut
+from taskboard26_api.task_schemas import TaskCreate, TaskOut, with_contract_types
 
 
 def test_title_is_trimmed() -> None:
@@ -56,6 +56,42 @@ def test_due_date_optional() -> None:
 
 def test_unknown_fields_ignored() -> None:
     assert not hasattr(TaskCreate.model_validate({"title": "x", "foo": 1}), "foo")
+
+
+def _typed(payload: dict[str, object]) -> list[tuple[tuple[object, ...], str]]:
+    with pytest.raises(ValidationError) as exc:
+        TaskCreate.model_validate(payload)
+    errors = [{**e, "loc": ("body", *e["loc"])} for e in exc.value.errors()]
+    return [(tuple(e["loc"]), e["type"]) for e in with_contract_types(errors)]
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected"),
+    [
+        ({}, "title-required"),
+        ({"title": ""}, "title-min"),
+        ({"title": "   "}, "title-min"),
+        ({"title": "a" * 201}, "title-max"),
+        ({"title": None}, "string_type"),
+        ({"title": 123}, "string_type"),
+        ({"title": True}, "string_type"),
+    ],
+)
+def test_title_errors_get_contract_types(payload: dict[str, object], expected: str) -> None:
+    assert _typed(payload) == [(("body", "title"), expected)]
+
+
+def test_due_date_errors_keep_type() -> None:
+    got = _typed({"title": "x", "due_date": "tomorrow"})
+    assert got == [(("body", "due_date"), "value_error")]
+
+
+def test_with_contract_types_does_not_mutate_input() -> None:
+    errors = [{"loc": ("body", "title"), "type": "missing", "msg": "m"}]
+    out = with_contract_types(errors)
+    assert errors[0]["type"] == "missing"
+    assert out[0]["type"] == "title-required"
+    assert out[0] is not errors[0]
 
 
 def test_task_out_json() -> None:
