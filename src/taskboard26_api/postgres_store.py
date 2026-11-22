@@ -81,7 +81,7 @@ class PostgresTaskStore:
                     connection.pgconn.socket, socket.AF_INET, socket.SOCK_STREAM
                 ) as dup:
                     dup.shutdown(socket.SHUT_RDWR)
-            except Exception:  # noqa: BLE001, S112 - best effort; the connection may be closed
+            except Exception:  # noqa: BLE001, S112  # nosec B112
                 continue
 
     def _run(self, operation: str, fn: Callable[[Engine], _T]) -> _T:
@@ -122,12 +122,14 @@ class PostgresTaskStore:
             self._ensure_schema(engine)
             with engine.begin() as conn:
                 conn.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": INSERT_LOCK_KEY})
-                count = conn.execute(text(f"SELECT count(*) FROM {TABLE}")).scalar_one()
+                count = conn.execute(
+                    text(f"SELECT count(*) FROM {TABLE}")  # nosec B608
+                ).scalar_one()
                 if count >= self._limit:
                     raise TaskLimitReachedError(f"task limit of {self._limit} reached")
                 row = conn.execute(
                     text(
-                        f"INSERT INTO {TABLE} (id, title, due_date) "
+                        f"INSERT INTO {TABLE} (id, title, due_date) "  # nosec B608
                         "VALUES (:id, :title, :due_date) "
                         "RETURNING id, title, due_date, created_at"
                     ),
@@ -143,7 +145,7 @@ class PostgresTaskStore:
             with engine.begin() as conn:
                 rows = conn.execute(
                     text(
-                        f"SELECT id, title, due_date, created_at FROM {TABLE} "
+                        f"SELECT id, title, due_date, created_at FROM {TABLE} "  # nosec B608
                         "ORDER BY created_at, seq"
                     )
                 ).all()

@@ -61,7 +61,8 @@ def list_tasks(store: StoreDep) -> list[TaskOut]:
 
 async def validation_exception_handler(request: Request, exc: Exception) -> Response:
     """422 handler: POST /tasks title errors carry the contract rule ids."""
-    assert isinstance(exc, RequestValidationError)
+    if not isinstance(exc, RequestValidationError):
+        raise exc
     if request.method == "POST" and request.url.path == "/tasks":
         exc = RequestValidationError(with_contract_types(exc.errors()), body=exc.body)
     return await request_validation_exception_handler(request, exc)
