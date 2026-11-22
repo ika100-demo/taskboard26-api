@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping, Sequence
 from datetime import UTC, date, datetime
-from typing import Annotated, Any, Protocol
+from typing import Annotated, Any, Final, Protocol
 from uuid import UUID
 
 from pydantic import (
@@ -27,6 +28,25 @@ def _parse_calendar_date(value: Any) -> date | None:
         except ValueError:
             pass
     raise ValueError(_DATE_ERROR)
+
+
+TITLE_RULE_TYPES: Final[Mapping[str, str]] = {
+    "missing": "title-required",
+    "string_too_short": "title-min",
+    "string_too_long": "title-max",
+}
+
+
+def with_contract_types(errors: Sequence[Any]) -> list[Any]:
+    """Return copies of validation errors with title errors typed by contract rule id."""
+    result: list[Any] = []
+    for error in errors:
+        entry = dict(error)
+        is_title = tuple(entry.get("loc", ())) == ("body", "title")
+        if is_title and entry.get("type") in TITLE_RULE_TYPES:
+            entry["type"] = TITLE_RULE_TYPES[entry["type"]]
+        result.append(entry)
+    return result
 
 
 class TaskLike(Protocol):

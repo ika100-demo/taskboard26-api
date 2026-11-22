@@ -47,3 +47,10 @@ def test_ids_unique() -> None:
     store = TaskStore()
     ids = {store.add("a", None).id for _ in range(50)}
     assert len(ids) == 50
+
+
+def test_in_memory_ping_true_and_ensure_schema_noop() -> None:
+    store = TaskStore()
+    assert store.ping() is True
+    assert store.ensure_schema() is None
+    assert len(store) == 0

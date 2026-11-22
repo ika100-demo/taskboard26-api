@@ -27,7 +27,7 @@ As a taskboard user, I want to list all tasks, so that I can see what I have rec
 - **AC-001.5** Given the service is running, when a client sends `POST /tasks` with a `due_date` that is not a calendar date in `YYYY-MM-DD` form (for example `"2026-02-30"`, `"24.12.2026"`, `"tomorrow"` or `"2026-12-24T10:00:00Z"`), then the response is `422` with a `detail` naming the `due_date` field, and `GET /tasks` lists no new task.
 - **AC-001.6** Given a title with leading or trailing whitespace such as `"  Buy milk  "`, when the task is created, then the returned and listed `title` is `"Buy milk"`.
 - **AC-001.7** Given 10,000 tasks exist, when a client sends a further valid `POST /tasks`, then the response is `409` with `detail` `"task limit reached"`, and `GET /tasks` still lists 10,000 tasks.
-- **AC-001.8** Given tasks were created, when the service restarts, then `GET /tasks` returns `200` with `[]`.
+- ~~**AC-001.8**~~ superseded by AC-002.1 on 2026-11-22: Given tasks were created, when the service restarts, then `GET /tasks` returns `200` with `[]`.
 
 ## Non-goals
 
@@ -67,3 +67,4 @@ As a taskboard user, I want to list all tasks, so that I can see what I have rec
 - 2026-11-22 approved
 - 2026-11-22 building
 - 2026-11-22 done
+- 2026-11-22 AC-001.8 superseded by AC-002.1
