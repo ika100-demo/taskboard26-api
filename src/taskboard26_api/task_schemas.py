@@ -30,10 +30,14 @@ def _parse_calendar_date(value: Any) -> date | None:
 
 
 class TaskLike(Protocol):
-    id: UUID
-    title: str
-    due_date: date | None
-    created_at: datetime
+    @property
+    def id(self) -> UUID: ...
+    @property
+    def title(self) -> str: ...
+    @property
+    def due_date(self) -> date | None: ...
+    @property
+    def created_at(self) -> datetime: ...
 
 
 class TaskCreate(BaseModel):
